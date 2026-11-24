@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#12345a">
+  <title>Campus RoadWatch — AI-Based Pothole Detection System</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="icon" type="image/png" href="./favicon.png">
+  <link rel="apple-touch-icon" href="./favicon.png">
+  <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-left">
+        <a class="brand" href="./" id="brandLink">
+          <span class="roadmark" aria-hidden="true"><i></i></span>
+          <span class="brand-text">
+            <strong>Campus RoadWatch</strong>
+            <small lang="hi">सड़क निरीक्षण</small>
+          </span>
+        </a>
+        <nav class="nav-tabs" aria-label="Main navigation">
+          <button type="button" class="nav-tab active" data-view="workspace">
+            <i data-icon="scan"></i>
+            <span>Workspace</span>
+          </button>
+          <button type="button" class="nav-tab" data-view="history">
+            <i data-icon="clock"></i>
+            <span>History</span>
+            <span class="badge" id="historyCount" hidden>0</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="topbar-right">
+        <select class="select-input" aria-label="Load sample road photo" id="demoChoice">
+          <option value="">Sample photos…</option>
+          <option value="wet">Wet Road Surface</option>
+          <option value="urban">Urban Pavement</option>
+          <option value="asphalt">Asphalt Close-up</option>
+        </select>
+        <button type="button" class="btn btn-primary" id="upload">
+          <i data-icon="upload"></i>
+          <span>Upload Photo</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <input type="file" id="file" accept="image/jpeg,image/png,image/webp" hidden>
+  <input type="file" id="modelFile" accept=".onnx" hidden>
+
+  <main class="main" id="main">
+    <div id="noticeWrap" class="notice-wrap" role="status" aria-live="polite" hidden>
+      <span id="notice" class="notice-text"></span>
+      <button type="button" class="notice-close" id="noticeClose" aria-label="Dismiss notification">
+        <i data-icon="x"></i>
+      </button>
+    </div>
+
+    <section id="workspace" class="workspace">
+      <div class="workspace-grid">
+        <!-- Left: Photo viewer & model controls -->
+        <article class="panel viewer-panel">
+          <div class="panel-header">
+            <div class="file-meta">
+              <span class="icon-chip"><i data-icon="image"></i></span>
+              <div class="file-meta-text">
+                <strong id="filename">wet-road.jpg</strong>
+                <small id="dimensions">Loading image…</small>
+              </div>
+              <span class="tag" id="source">Sample</span>
+            </div>
+            <div class="toolbar-actions">
+              <button type="button" class="btn btn-ghost btn-sm" id="outlines" aria-pressed="true" disabled title="Toggle bounding boxes (O)">
+                <i data-icon="eye"></i>
+                <span>Boxes</span>
+              </button>
+              <button type="button" class="btn btn-ghost btn-sm" id="downloadPng" disabled title="Download annotated image">
+                <i data-icon="camera"></i>
+                <span>Save PNG</span>
+              </button>
+              <button type="button" class="btn btn-icon" id="expand" aria-label="Expand viewer" title="Fullscreen">
+                <i data-icon="expand"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="viewer" id="viewer">
+            <div class="frame" id="frame">
+              <img id="photo" src="./demo/road.jpg" alt="Road inspection photo">
+              <svg id="boxes" aria-label="Detected road damage overlays"></svg>
+            </div>
+            <div class="drop-overlay" id="dropOverlay" hidden>
+              <i data-icon="upload"></i>
+              <span>Drop road photo to inspect</span>
+            </div>
+          </div>
+
+          <div class="controls-bar">
+            <div class="control-group model-group">
+              <label for="modelSelect">Detection Model</label>
+              <div class="model-row">
+                <select class="select-input select-sm" id="modelSelect"></select>
+                <button type="button" class="btn btn-ghost btn-sm" id="loadModelBtn" title="Load a custom YOLOv8 / YOLO11 .onnx model">
+                  <i data-icon="cpu"></i>
+                  <span>Load .onnx</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="control-group slider-group">
+              <div class="slider-label">
+                <label for="thresholdSlider">Confidence</label>
+                <span class="mono" id="thresholdValue">35%</span>
+              </div>
+              <input type="range" id="thresholdSlider" min="15" max="85" step="5" value="35">
+            </div>
+
+            <div class="control-group slider-group">
+              <div class="slider-label">
+                <label for="iouSlider">NMS Overlap</label>
+                <span class="mono" id="iouValue">45%</span>
+              </div>
+              <input type="range" id="iouSlider" min="20" max="75" step="5" value="45">
+            </div>
+          </div>
+        </article>
+
+        <!-- Right: Analysis & review panel -->
+        <article class="panel analysis-panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <i data-icon="layers"></i>
+              <h2>Inspection Analysis</h2>
+            </div>
+            <span class="tag tag-accent" id="reviewTotal" hidden>0 found</span>
+          </div>
+
+          <div id="ready" class="empty-state">
+            <div class="empty-icon"><i data-icon="target"></i></div>
+            <h3 id="readyTitle">Ready to inspect</h3>
+            <p id="readyText">Run pothole detection on this road photo, or drag and drop / paste (Ctrl+V) a new image.</p>
+            <button type="button" class="btn btn-primary btn-lg" id="analyze" disabled>
+              <i data-icon="scan"></i>
+              <span>Run Detection</span>
+            </button>
+          </div>
+
+          <div id="results" class="results" hidden>
+            <div class="metrics-grid" id="metricsGrid">
+              <div class="metric-card">
+                <span class="metric-label">Detections</span>
+                <strong class="metric-value mono" id="metricCount">0</strong>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Damaged Area</span>
+                <strong class="metric-value mono" id="metricArea">0.0%</strong>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Condition</span>
+                <strong class="metric-value" id="metricCondition">—</strong>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Speed</span>
+                <strong class="metric-value mono" id="metricSpeed">—</strong>
+              </div>
+            </div>
+
+            <div class="list-header">
+              <span id="summary">0 of 0 reviewed</span>
+              <button type="button" class="btn-link" id="reanalyze">Re-run model</button>
+            </div>
+
+            <div id="candidateList" class="candidate-list"></div>
+
+            <div class="decision-bar" id="decision"></div>
+
+            <div class="export-bar">
+              <button type="button" class="btn btn-secondary" id="export">
+                <i data-icon="download"></i>
+                <span>Export CSV</span>
+              </button>
+              <button type="button" class="btn btn-ghost" id="exportPngBtn">
+                <i data-icon="image"></i>
+                <span>Annotated PNG</span>
+              </button>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="history" class="history-section" hidden>
+      <div class="section-head">
+        <div>
+          <h1>Saved Inspections</h1>
+          <p>Reopen or remove previous road inspections stored locally in this browser.</p>
+        </div>
+        <button type="button" class="btn btn-secondary" id="back">
+          <i data-icon="arrowLeft"></i>
+          <span>Back to Workspace</span>
+        </button>
+      </div>
+      <div class="panel history-list" id="historyList"></div>
+    </section>
+  </main>
+
+  <footer class="project-footer">
+    <div class="footer-inner">
+      <div class="footer-left">
+        <strong>Design of an AI-Based Pothole Detection System</strong>
+        <span class="footer-sep">·</span>
+        <span>Group CST_05</span>
+      </div>
+      <div class="footer-right">
+        <span>Developed by <strong>Satvik Kalra</strong> (00918012723) &amp; <strong>Pranjal Tripathi</strong> (01418012723)</span>
+        <span class="footer-sep">·</span>
+        <span>Guide: <strong>Mr. Akash Bhardwaj</strong></span>
+      </div>
+    </div>
+  </footer>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

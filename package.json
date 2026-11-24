@@ -1,0 +1,13 @@
+{
+  "name": "campus-roadwatch",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline-capable road surface and pothole inspection workbench.",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/serve.mjs",
+    "test": "node --test"
+  }
+}
